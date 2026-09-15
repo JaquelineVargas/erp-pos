@@ -11,6 +11,7 @@ use App\Models\InventoryMovement;
 use App\Services\ArqueoService;
 use App\Services\TicketService;
 use App\Services\DateUtils;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -25,8 +26,8 @@ class SaleController extends Controller
     {
         $query = Sale::with('user', 'customer', 'items.product');
 
-        if ($request->from) $query->whereDate('created_at', '>=', $request->from);
-        if ($request->to) $query->whereDate('created_at', '<=', $request->to);
+        if ($request->from) $query->where('created_at', '>=', Carbon::parse($request->from)->startOfDay());
+        if ($request->to) $query->where('created_at', '<=', Carbon::parse($request->to)->endOfDay());
         if ($request->payment_method) $query->where('payment_method', $request->payment_method);
         if ($request->user_role) $query->whereHas('user', fn($q) => $q->where('role', $request->user_role));
         if ($request->user_id) $query->where('user_id', $request->user_id);

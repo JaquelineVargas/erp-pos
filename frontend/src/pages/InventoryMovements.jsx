@@ -55,7 +55,9 @@ export default function InventoryMovements() {
       </div>
 
       <div className="filters" style={{ marginBottom: 16 }}>
+        <span style={{ alignSelf: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Desde</span>
         <input type="date" value={from} onChange={e => { setFrom(e.target.value); setPage(1); }} className="input" />
+        <span style={{ alignSelf: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Hasta</span>
         <input type="date" value={to} onChange={e => { setTo(e.target.value); setPage(1); }} className="input" />
       </div>
 
@@ -69,7 +71,7 @@ export default function InventoryMovements() {
               <th>Stock Anterior</th>
               <th>Stock Posterior</th>
               <th>Usuario</th>
-              <th>Notas</th>
+              <th style={{ width: '35%' }}>Notas</th>
             </tr>
           </thead>
           <tbody>
@@ -92,7 +94,7 @@ export default function InventoryMovements() {
                 <td>{formatStock(m.stock_before, product.inventory_type)}</td>
                 <td>{formatStock(m.stock_after, product.inventory_type)}</td>
                 <td style={{ fontSize: '0.85rem' }}>{m.user?.name || '—'}</td>
-                <td style={{ fontSize: '0.85rem', maxWidth: 200, wordBreak: 'break-word' }}>{m.notes || '—'}</td>
+                <td style={{ fontSize: '0.85rem', wordBreak: 'break-word' }}>{m.notes || '—'}</td>
               </tr>
             ))}
           </tbody>

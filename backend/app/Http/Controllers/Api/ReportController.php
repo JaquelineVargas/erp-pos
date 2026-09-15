@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\Customer;
 use App\Models\InventoryMovement;
 use App\Models\ProductBatch;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -18,8 +19,8 @@ class ReportController extends Controller
         $query = Sale::with('user', 'customer', 'items.product')
             ->select('sales.*');
 
-        if ($request->from) $query->whereDate('sales.created_at', '>=', $request->from);
-        if ($request->to) $query->whereDate('sales.created_at', '<=', $request->to);
+        if ($request->from) $query->where('sales.created_at', '>=', Carbon::parse($request->from)->startOfDay());
+        if ($request->to) $query->where('sales.created_at', '<=', Carbon::parse($request->to)->endOfDay());
         if ($request->user_id) $query->where('sales.user_id', $request->user_id);
         if ($request->payment_method) $query->where('sales.payment_method', $request->payment_method);
         if ($request->customer_id) $query->where('sales.customer_id', $request->customer_id);
@@ -85,13 +86,13 @@ class ReportController extends Controller
 
         if ($request->from) {
             $query->whereHas('sales', function ($q) use ($request) {
-                $q->whereDate('created_at', '>=', $request->from);
+                $q->where('created_at', '>=', Carbon::parse($request->from)->startOfDay());
             });
         }
 
         if ($request->to) {
             $query->whereHas('sales', function ($q) use ($request) {
-                $q->whereDate('created_at', '<=', $request->to);
+                $q->where('created_at', '<=', Carbon::parse($request->to)->endOfDay());
             });
         }
 
@@ -105,8 +106,8 @@ class ReportController extends Controller
         $query = InventoryMovement::with('product', 'user', 'batch', 'conversion')
             ->where('type', 'purchase');
 
-        if ($request->from) $query->whereDate('created_at', '>=', $request->from);
-        if ($request->to) $query->whereDate('created_at', '<=', $request->to);
+        if ($request->from) $query->where('created_at', '>=', Carbon::parse($request->from)->startOfDay());
+        if ($request->to) $query->where('created_at', '<=', Carbon::parse($request->to)->endOfDay());
         if ($request->search) $query->whereHas('product', fn($q) => $q->where('name', 'like', "%{$request->search}%"));
         if ($request->user_id) $query->where('user_id', $request->user_id);
 

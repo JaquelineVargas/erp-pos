@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\ProductBatch;
 use App\Models\Sale;
 use App\Services\DateUtils;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -21,8 +22,8 @@ class ExportController extends Controller
     {
         $query = Sale::with('user', 'customer');
 
-        if ($request->from) $query->whereDate('created_at', '>=', $request->from);
-        if ($request->to) $query->whereDate('created_at', '<=', $request->to);
+        if ($request->from) $query->where('created_at', '>=', Carbon::parse($request->from)->startOfDay());
+        if ($request->to) $query->where('created_at', '<=', Carbon::parse($request->to)->endOfDay());
         if ($request->payment_method) $query->where('payment_method', $request->payment_method);
         if ($request->user_id) $query->where('user_id', $request->user_id);
 
@@ -99,8 +100,8 @@ class ExportController extends Controller
     {
         $arqueos = Arqueo::with('user')->orderBy('created_at', 'desc');
 
-        if ($request->from) $arqueos->whereDate('created_at', '>=', $request->from);
-        if ($request->to) $arqueos->whereDate('created_at', '<=', $request->to);
+        if ($request->from) $arqueos->where('created_at', '>=', Carbon::parse($request->from)->startOfDay());
+        if ($request->to) $arqueos->where('created_at', '<=', Carbon::parse($request->to)->endOfDay());
 
         $data = $arqueos->get();
 
@@ -185,8 +186,8 @@ class ExportController extends Controller
         $query = InventoryMovement::with('product', 'user', 'batch', 'conversion')
             ->where('type', 'purchase');
 
-        if ($request->from) $query->whereDate('created_at', '>=', $request->from);
-        if ($request->to) $query->whereDate('created_at', '<=', $request->to);
+        if ($request->from) $query->where('created_at', '>=', Carbon::parse($request->from)->startOfDay());
+        if ($request->to) $query->where('created_at', '<=', Carbon::parse($request->to)->endOfDay());
 
         $movements = $query->orderBy('created_at', 'desc')->get();
 

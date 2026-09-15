@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
@@ -206,10 +207,10 @@ class ProductController extends Controller
         $query = $product->inventoryMovements()->with('user');
 
         if ($request->from) {
-            $query->whereDate('created_at', '>=', $request->from);
+            $query->where('created_at', '>=', Carbon::parse($request->from)->startOfDay());
         }
         if ($request->to) {
-            $query->whereDate('created_at', '<=', $request->to);
+            $query->where('created_at', '<=', Carbon::parse($request->to)->endOfDay());
         }
 
         return response()->json(
@@ -220,15 +221,101 @@ class ProductController extends Controller
 
     public function adjustStock(Request $request, Product $product)
     {
-        $request->validate([
-            'new_stock' => 'required|numeric|min:0',
+        $isDecimal = $product->is_weight_or_volume;
+
+        $rules = [
             'reason' => 'required|string|max:255',
             'notes' => 'nullable|string|max:500',
-        ]);
+            'batch_id' => 'nullable|exists:product_batches,id',
+        ];
+
+        if ($request->reason === 'Conteo físico') {
+            if ($product->track_batches) {
+                $rules['batches'] = 'required|array';
+                $rules['batches.*.id'] = 'required|exists:product_batches,id';
+                $rules['batches.*.physical_stock'] = 'required|numeric|min:0';
+            } else {
+                $rules['physical_stock'] = 'required|numeric|min:0';
+            }
+        } else {
+            $rules['type'] = 'required|in:in,out';
+            $rules['quantity'] = $isDecimal
+                ? 'required|numeric|min:0.001'
+                : 'required|numeric|min:1';
+        }
+
+        $validated = $request->validate($rules);
+
+        $notes = $validated['reason'];
+        if (!empty($validated['notes'])) {
+            $notes .= ': ' . $validated['notes'];
+        }
+
+        if ($request->reason === 'Conteo físico' && $product->track_batches) {
+            $totalDiff = 0;
+            $batchIds = $product->batches()->pluck('id')->toArray();
+            $oldStock = (float) $product->current_stock;
+
+            foreach ($validated['batches'] as $batchData) {
+                $batch = \App\Models\ProductBatch::findOrFail($batchData['id']);
+                $batchOldStock = (float) $batch->current_quantity;
+                $batchNewStock = (float) $batchData['physical_stock'];
+                $batchDiff = $batchNewStock - $batchOldStock;
+
+                $batch->update(['current_quantity' => $batchNewStock]);
+                $totalDiff += $batchDiff;
+
+                $product->inventoryMovements()->create([
+                    'type' => 'adjustment',
+                    'quantity' => $batchDiff,
+                    'stock_before' => $batchOldStock,
+                    'stock_after' => $batchNewStock,
+                    'user_id' => auth()->id(),
+                    'batch_id' => $batch->id,
+                    'notes' => $notes . ' (Lote: ' . $batch->batch_code . ')',
+                ]);
+            }
+
+            $newStock = max(0, (float) $product->batches()->sum('current_quantity'));
+            $product->update(['current_stock' => $newStock]);
+
+            return response()->json([
+                'message' => 'Stock ajustado correctamente.',
+                'product' => $product->fresh()->load('category', 'batches', 'conversions'),
+            ]);
+        }
 
         $oldStock = (float) $product->current_stock;
-        $newStock = (float) $request->new_stock;
-        $quantity = $newStock - $oldStock;
+
+        if ($request->reason === 'Conteo físico') {
+            $physicalStock = (float) $validated['physical_stock'];
+            $quantity = $physicalStock - $oldStock;
+            $newStock = $physicalStock;
+        } else {
+            $quantity = (float) $validated['quantity'];
+            if ($validated['type'] === 'out') {
+                $quantity = -$quantity;
+            }
+            $newStock = $oldStock + $quantity;
+        }
+
+        if ($newStock < 0) {
+            return response()->json([
+                'message' => 'El stock resultante no puede ser negativo. Stock actual: ' . $oldStock,
+            ], 422);
+        }
+
+        $batchId = null;
+        if ($product->track_batches) {
+            if (empty($validated['batch_id'])) {
+                return response()->json([
+                    'message' => 'Este producto requiere seleccionar un lote.',
+                ], 422);
+            }
+            $batch = \App\Models\ProductBatch::findOrFail($validated['batch_id']);
+            $batch->increment('current_quantity', $quantity);
+            $batchId = $batch->id;
+        }
 
         $product->update(['current_stock' => $newStock]);
 
@@ -238,7 +325,8 @@ class ProductController extends Controller
             'stock_before' => $oldStock,
             'stock_after' => $newStock,
             'user_id' => auth()->id(),
-            'notes' => $request->reason . ($request->notes ? ': ' . $request->notes : ''),
+            'batch_id' => $batchId,
+            'notes' => $notes,
         ]);
 
         return response()->json([

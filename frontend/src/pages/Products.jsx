@@ -53,8 +53,10 @@ export default function Products() {
   const [movementsData, setMovementsData] = useState({ data: [], current_page: 1, last_page: 1 });
   const [movementsFilters, setMovementsFilters] = useState({ from: '', to: '' });
   const [adjustProduct, setAdjustProduct] = useState(null);
-  const [adjustForm, setAdjustForm] = useState({ new_stock: '', reason: '', notes: '' });
+  const [adjustForm, setAdjustForm] = useState({ type: 'in', quantity: '', reason: '', notes: '', batch_id: '', physical_stock: '' });
   const [adjusting, setAdjusting] = useState(false);
+  const [adjustBatches, setAdjustBatches] = useState([]);
+  const [adjustBatchStocks, setAdjustBatchStocks] = useState({});
   const [movementsPage, setMovementsPage] = useState(1);
   const [restockProduct, setRestockProduct] = useState(null);
   const [restockForm, setRestockForm] = useState({ quantity: '', type: 'purchase', unit_cost: '', notes: '', reference: '', batch_option: 'none', batch_id: '', batch_code: '', batch_expiration: '', conversion_id: '' });
@@ -251,25 +253,51 @@ export default function Products() {
     setMovementsPage(page);
   };
 
-  const openAdjustStock = (p) => {
+  const openAdjustStock = async (p) => {
     setAdjustProduct(p);
-    setAdjustForm({ new_stock: String(p.current_stock), reason: '', notes: '' });
+    setAdjustForm({ type: 'in', quantity: '', reason: '', notes: '', batch_id: '', physical_stock: '' });
+    if (p.track_batches) {
+      const { data: batches } = await api.get(`/products/${p.id}/batches`);
+      setAdjustBatches(batches);
+      const stocks = {};
+      batches.forEach(b => { stocks[b.id] = formatStock(b.current_quantity, p.inventory_type); });
+      setAdjustBatchStocks(stocks);
+    } else {
+      setAdjustBatches([]);
+      setAdjustBatchStocks({});
+    }
   };
 
   const handleAdjustStock = async (e) => {
     e.preventDefault();
-    if (!adjustProduct) return;
-    if (adjusting) return;
+    if (!adjustProduct || adjusting) return;
     setAdjusting(true);
     try {
-      await api.post(`/products/${adjustProduct.id}/adjust-stock`, {
-        new_stock: Number(adjustForm.new_stock),
-        reason: adjustForm.reason,
-        notes: adjustForm.notes,
-      });
+      const payload = adjustForm.reason === 'Conteo físico' && adjustProduct.track_batches
+        ? {
+            reason: adjustForm.reason,
+            notes: adjustForm.notes,
+            batches: Object.entries(adjustBatchStocks).map(([id, stock]) => ({
+              id: Number(id),
+              physical_stock: Number(stock),
+            })),
+          }
+        : adjustForm.reason === 'Conteo físico'
+        ? {
+            reason: adjustForm.reason,
+            physical_stock: Number(adjustForm.physical_stock),
+            notes: adjustForm.notes,
+          }
+        : {
+            type: adjustForm.type,
+            quantity: Number(adjustForm.quantity),
+            reason: adjustForm.reason,
+            notes: adjustForm.notes,
+            batch_id: adjustForm.batch_id || undefined,
+          };
+      await api.post(`/products/${adjustProduct.id}/adjust-stock`, payload);
       setAdjustProduct(null);
       loadProducts();
-      alert('Stock ajustado correctamente.');
     } catch (err) {
       alert(err.response?.data?.message || 'Error al ajustar stock');
     } finally {
@@ -356,7 +384,14 @@ export default function Products() {
 
   const todayStr = () => new Date().toISOString().split('T')[0];
 
-  const adjustDiff = Number(adjustForm.new_stock) - (adjustProduct ? Number(adjustProduct.current_stock) : 0);
+  const adjustStockActual = adjustProduct ? Number(adjustProduct.current_stock) : 0;
+  const adjustCantidad = Number(adjustForm.quantity || 0);
+  const adjustResultante = adjustForm.type === 'in'
+    ? adjustStockActual + adjustCantidad
+    : adjustStockActual - adjustCantidad;
+  const adjustPhysicalDiff = adjustProduct
+    ? Number(adjustForm.physical_stock || 0) - adjustStockActual
+    : 0;
 
   const TYPE_LABELS = {
     sale: 'Venta', purchase: 'Compra', adjustment: 'Ajuste',
@@ -719,10 +754,12 @@ export default function Products() {
       {/* Modal Movimientos */}
       {showMovements && (
         <div className="modal-overlay" onClick={() => setShowMovements(null)}>
-          <div className="modal modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 800, maxHeight: '85vh', overflowY: 'auto' }}>
+          <div className="modal modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 1050, maxHeight: '85vh', overflowY: 'auto' }}>
             <h3>Movimientos: {showMovements.name}</h3>
             <div className="filters" style={{ marginBottom: 12 }}>
+              <span style={{ alignSelf: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Desde</span>
               <input type="date" value={movementsFilters.from} onChange={e => setMovementsFilters(f => ({ ...f, from: e.target.value }))} className="input" />
+              <span style={{ alignSelf: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Hasta</span>
               <input type="date" value={movementsFilters.to} onChange={e => setMovementsFilters(f => ({ ...f, to: e.target.value }))} className="input" />
               <button className="btn-primary btn-sm" onClick={() => loadMovements(showMovements.id)}>Buscar</button>
             </div>
@@ -756,7 +793,7 @@ export default function Products() {
                       <td>{Number(m.stock_before).toFixed(3).replace(/\.?0+$/, '')}</td>
                       <td>{Number(m.stock_after).toFixed(3).replace(/\.?0+$/, '')}</td>
                       <td style={{ fontSize: '0.85rem' }}>{m.user?.name || '—'}</td>
-                      <td style={{ fontSize: '0.85rem', maxWidth: 200, wordBreak: 'break-word' }}>{m.notes || '—'}</td>
+                      <td style={{ fontSize: '0.85rem', wordBreak: 'break-word' }}>{m.notes || '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -786,42 +823,219 @@ export default function Products() {
       {/* Modal Ajustar Stock */}
       {adjustProduct && (
         <div className="modal-overlay" onClick={() => setAdjustProduct(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 450 }}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
             <h3>Ajustar Stock: {adjustProduct.name}</h3>
             <form onSubmit={handleAdjustStock}>
+              {adjustProduct.track_batches && adjustBatches.length > 0 && adjustForm.reason !== 'Conteo físico' && (
+                <fieldset className="form-section">
+                  <legend>Lotes Disponibles</legend>
+                  <div style={{ overflowX: 'auto', marginBottom: 8 }}>
+                    <table className="table" style={{ minWidth: 300 }}>
+                      <thead>
+                        <tr>
+                          <th>Lote</th>
+                          <th>Vencimiento</th>
+                          <th>Stock</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {adjustBatches.filter(b => adjustForm.type === 'out' ? Number(b.current_quantity) > 0 : true).map(b => (
+                          <tr key={b.id}
+                            style={{ cursor: 'pointer', background: adjustForm.batch_id === String(b.id) ? 'var(--bg-hover)' : '' }}
+                            onClick={() => setAdjustForm(f => ({ ...f, batch_id: String(b.id) }))}>
+                            <td>{b.batch_code}</td>
+                            <td>{b.expiration_date || '—'}</td>
+                            <td>{formatStock(b.current_quantity, adjustProduct.inventory_type)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="form-group">
+                    <label>Lote seleccionado *</label>
+                    <select value={adjustForm.batch_id}
+                      onChange={e => setAdjustForm(f => ({ ...f, batch_id: e.target.value }))}
+                      required>
+                      <option value="">Seleccionar lote...</option>
+                      {adjustBatches.filter(b => adjustForm.type === 'out' ? Number(b.current_quantity) > 0 : true).map(b => (
+                        <option key={b.id} value={b.id}>
+                          {b.batch_code} — {b.expiration_date || 'S/V'} — Stock: {formatStock(b.current_quantity, adjustProduct.inventory_type)}
+                        </option>
+                      ))}
+                    </select>
+                    {adjustForm.batch_id && (
+                      <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: 4 }}>
+                        Stock del lote: {formatStock(adjustBatches.find(b => b.id === Number(adjustForm.batch_id))?.current_quantity || 0, adjustProduct.inventory_type)} {adjustProduct.base_unit}
+                      </small>
+                    )}
+                  </div>
+                </fieldset>
+              )}
+              {adjustProduct.track_batches && adjustBatches.length === 0 && (
+                <p style={{ color: 'var(--warning)', marginBottom: 12, fontSize: '0.9rem' }}>
+                  Este producto no tiene lotes registrados. Cree un lote antes de ajustar stock.
+                </p>
+              )}
+
               <div className="form-group">
                 <label>Stock Actual</label>
-                <input type="number" value={formatStock(adjustProduct.current_stock, adjustProduct.inventory_type)} disabled className="input input-readonly" />
+                <input type="text" value={formatStock(adjustProduct.current_stock, adjustProduct.inventory_type) + ' ' + adjustProduct.base_unit} disabled className="input input-readonly" />
               </div>
-              <div className="form-group">
-                <label>Nuevo Stock *</label>
-                <input type="number" step={adjustProduct.inventory_type === 'unit' ? '1' : '0.001'} min="0"
-                  value={adjustForm.new_stock}
-                  onChange={e => setAdjustForm(f => ({ ...f, new_stock: e.target.value }))}
-                  required />
-              </div>
-              <div className={`adjust-diff ${adjustDiff > 0 ? 'positive' : adjustDiff < 0 ? 'negative' : 'zero'}`}>
-                Diferencia: {adjustDiff > 0 ? '+' : ''}{formatStock(adjustDiff, adjustProduct.inventory_type)} {adjustProduct.base_unit}
-              </div>
+
               <div className="form-group">
                 <label>Motivo del Ajuste *</label>
                 <select value={adjustForm.reason} onChange={e => setAdjustForm(f => ({ ...f, reason: e.target.value }))} required>
                   <option value="">Seleccionar motivo</option>
-                  <option value="Inventario físico">Inventario físico</option>
-                  <option value="Merma">Merma</option>
+                  <option value="Conteo físico">Conteo físico</option>
                   <option value="Robo">Robo</option>
-                  <option value="Daño">Daño</option>
-                  <option value="Corrección">Corrección</option>
+                  <option value="Producto dañado">Producto dañado</option>
+                  <option value="Producto vencido">Producto vencido</option>
                   <option value="Donación">Donación</option>
+                  <option value="Consumo interno">Consumo interno</option>
+                  <option value="Corrección administrativa">Corrección administrativa</option>
                   <option value="Otro">Otro</option>
                 </select>
               </div>
+
+              {adjustForm.reason === 'Conteo físico' && adjustProduct.track_batches && adjustBatches.length > 0 ? (
+                <>
+                  <fieldset className="form-section">
+                    <legend>Conteo Físico por Lote</legend>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="table" style={{ minWidth: 400 }}>
+                        <thead>
+                          <tr>
+                            <th>Lote</th>
+                            <th>Vencimiento</th>
+                            <th>Stock actual</th>
+                            <th>Stock contado *</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {adjustBatches.map(b => {
+                            const entered = Number(adjustBatchStocks[b.id] ?? b.current_quantity);
+                            const diff = entered - Number(b.current_quantity);
+                            return (
+                              <tr key={b.id}>
+                                <td>{b.batch_code}</td>
+                                <td>{b.expiration_date || '—'}</td>
+                                <td>{formatStock(b.current_quantity, adjustProduct.inventory_type)}</td>
+                                <td>
+                                  <input type="number"
+                                    step={adjustProduct.inventory_type === 'unit' ? '1' : '0.001'}
+                                    min="0"
+                                    value={adjustBatchStocks[b.id] ?? ''}
+                                    onChange={e => setAdjustBatchStocks(s => ({ ...s, [b.id]: e.target.value }))}
+                                    style={{ width: 100 }}
+                                    required />
+                                  {diff !== 0 && (
+                                    <span style={{ marginLeft: 8, fontSize: '0.8rem', color: diff > 0 ? 'var(--success)' : 'var(--danger)' }}>
+                                      {diff > 0 ? '+' : ''}{formatStock(diff, adjustProduct.inventory_type)}
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div style={{ marginTop: 8, textAlign: 'right' }}>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                        Total sistema: {formatStock(adjustStockActual, adjustProduct.inventory_type)}
+                        {' — '}
+                        Total contado: {formatStock(Object.values(adjustBatchStocks).reduce((a, v) => a + Number(v || 0), 0), adjustProduct.inventory_type)}
+                        {' — '}
+                      </span>
+                      <span className={`adjust-diff ${(() => { const d = Object.values(adjustBatchStocks).reduce((a, v) => a + Number(v || 0), 0) - adjustStockActual; return d > 0 ? 'positive' : d < 0 ? 'negative' : 'zero'; })()}`}>
+                        Diferencia: {(() => { const d = Object.values(adjustBatchStocks).reduce((a, v) => a + Number(v || 0), 0) - adjustStockActual; return (d > 0 ? '+' : '') + formatStock(d, adjustProduct.inventory_type) + ' ' + adjustProduct.base_unit; })()}
+                      </span>
+                    </div>
+                  </fieldset>
+                </>
+              ) : adjustForm.reason === 'Conteo físico' ? (
+                <>
+                  <div className="form-group">
+                    <label>Stock según sistema</label>
+                    <input type="text" value={formatStock(adjustProduct.current_stock, adjustProduct.inventory_type) + ' ' + adjustProduct.base_unit} disabled className="input input-readonly" />
+                  </div>
+                  <div className="form-group">
+                    <label>Stock contado físicamente *</label>
+                    <input type="number"
+                      step={adjustProduct.inventory_type === 'unit' ? '1' : '0.001'}
+                      min="0"
+                      value={adjustForm.physical_stock}
+                      onChange={e => setAdjustForm(f => ({ ...f, physical_stock: e.target.value }))}
+                      placeholder="0"
+                      required />
+                  </div>
+                  <div className={`adjust-diff ${adjustPhysicalDiff > 0 ? 'positive' : adjustPhysicalDiff < 0 ? 'negative' : 'zero'}`}>
+                    Diferencia: {adjustPhysicalDiff > 0 ? '+' : ''}{formatStock(adjustPhysicalDiff, adjustProduct.inventory_type)} {adjustProduct.base_unit}
+                  </div>
+                </>
+              ) : adjustForm.reason && adjustForm.reason !== '' ? (
+                <>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Tipo de movimiento *</label>
+                      <div className="radio-group">
+                        <label className="radio-label">
+                          <input type="radio" name="adjust-type" value="in"
+                            checked={adjustForm.type === 'in'}
+                            onChange={() => setAdjustForm(f => ({ ...f, type: 'in' }))} />
+                          Entrada
+                        </label>
+                        <label className="radio-label">
+                          <input type="radio" name="adjust-type" value="out"
+                            checked={adjustForm.type === 'out'}
+                            onChange={() => setAdjustForm(f => ({ ...f, type: 'out' }))} />
+                          Salida
+                        </label>
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label>Cantidad *</label>
+                      <input type="number"
+                        step={adjustProduct.inventory_type === 'unit' ? '1' : '0.001'}
+                        min={adjustProduct.inventory_type === 'unit' ? '1' : '0.001'}
+                        value={adjustForm.quantity}
+                        onChange={e => setAdjustForm(f => ({ ...f, quantity: e.target.value }))}
+                        placeholder="0"
+                        required />
+                      <small style={{ color: 'var(--text-muted)' }}>{adjustProduct.base_unit}</small>
+                    </div>
+                  </div>
+                  {adjustForm.type === 'out' && adjustCantidad > adjustStockActual && (
+                    <p style={{ color: 'var(--danger)', fontSize: '0.85rem', marginTop: 4 }}>
+                      Stock insuficiente. Stock actual: {formatStock(adjustStockActual, adjustProduct.inventory_type)} {adjustProduct.base_unit}
+                    </p>
+                  )}
+                  <div className={`adjust-diff ${adjustResultante > adjustStockActual ? 'positive' : adjustResultante < adjustStockActual ? 'negative' : 'zero'}`}>
+                    Stock Resultante: {formatStock(adjustResultante, adjustProduct.inventory_type)} {adjustProduct.base_unit}
+                    {adjustCantidad > 0 && (
+                      <span style={{ fontSize: '0.8rem', opacity: 0.7, marginLeft: 8 }}>
+                        ({adjustForm.type === 'in' ? '+' : '-'}{formatStock(adjustCantidad, adjustProduct.inventory_type)})
+                      </span>
+                    )}
+                  </div>
+                </>
+              ) : null}
+
               <div className="form-group">
-                <label>Observaciones</label>
-                <textarea value={adjustForm.notes} onChange={e => setAdjustForm(f => ({ ...f, notes: e.target.value }))} rows="2" />
+                <label>Observaciones{adjustForm.reason === 'Otro' ? ' *' : ''}</label>
+                <textarea value={adjustForm.notes}
+                  onChange={e => setAdjustForm(f => ({ ...f, notes: e.target.value }))}
+                  rows="2"
+                  required={adjustForm.reason === 'Otro'} />
+                {adjustForm.reason === 'Otro' && !adjustForm.notes && (
+                  <small style={{ color: 'var(--warning)' }}>Obligatorio para motivo "Otro"</small>
+                )}
               </div>
+
               <div className="form-actions">
-                <button type="submit" className="btn-primary" disabled={adjusting}>{adjusting ? 'Ajustando...' : 'Ajustar Stock'}</button>
+                <button type="submit" className="btn-primary" disabled={adjusting}>
+                  {adjusting ? 'Ajustando...' : 'Ajustar Stock'}
+                </button>
                 <button type="button" className="btn-secondary" onClick={() => setAdjustProduct(null)}>Cancelar</button>
               </div>
             </form>

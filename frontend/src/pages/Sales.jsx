@@ -40,7 +40,9 @@ export default function Sales() {
       </div>
 
       <div className="filters">
+        <span style={{ alignSelf: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Desde</span>
         <input type="date" value={from} onChange={e => setFrom(e.target.value)} className="input" />
+        <span style={{ alignSelf: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Hasta</span>
         <input type="date" value={to} onChange={e => setTo(e.target.value)} className="input" />
         <select value={paymentFilter} onChange={e => setPaymentFilter(e.target.value)} className="input">
           <option value="">Todos los métodos</option>

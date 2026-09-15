@@ -1,0 +1,7 @@
+# Base de datos de desarrollo
+backend/database/database.sqlite
+
+# Sistema
+.DS_Store
+Thumbs.db
+*.log
