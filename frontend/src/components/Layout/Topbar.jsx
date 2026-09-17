@@ -8,6 +8,8 @@ export default function Topbar() {
 
   useEffect(() => {
     checkArqueo();
+    const interval = setInterval(checkArqueo, 15000);
+    return () => clearInterval(interval);
   }, []);
 
   const checkArqueo = async () => {

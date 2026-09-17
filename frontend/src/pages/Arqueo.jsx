@@ -53,7 +53,7 @@ export default function Arqueo() {
 
   const closeArqueo = async () => {
     if (closing) return;
-    if (!finalAmount) return alert('Ingresa el monto final');
+    if (!finalAmount) return alert('⚠️ Ingresa el monto final antes de cerrar el arqueo');
     setClosing(true);
     setCloseError('');
     try {
@@ -269,7 +269,7 @@ export default function Arqueo() {
             <textarea value={closeNotes} onChange={e => setCloseNotes(e.target.value)} rows="2" placeholder="Observaciones..." />
           </div>
         </div>
-        <button className="btn-danger btn-full" onClick={closeArqueo} disabled={!finalAmount || closing}>
+        <button className="btn-danger btn-full" onClick={closeArqueo} disabled={closing}>
           Confirmar Cierre de Arqueo
         </button>
       </div>
