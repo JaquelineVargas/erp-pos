@@ -33,7 +33,7 @@ export default function Backups() {
 
   const downloadBackup = async (backup) => {
     try {
-      const response = await api.get(`/backups/${backup.id}/download`, {
+      const response = await api.get(`/backups/${backup.id}`, {
         responseType: 'blob',
       });
       const blob = new Blob([response.data]);

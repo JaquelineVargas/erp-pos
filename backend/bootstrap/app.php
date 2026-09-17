@@ -13,6 +13,12 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->statefulApi();
+        $middleware->api(prepend: [
+            \Illuminate\Foundation\Http\Middleware\TransformsRequest::class,
+            \Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull::class,
+            \Illuminate\Foundation\Http\Middleware\TrimStrings::class,
+            \Illuminate\Foundation\Http\Middleware\ValidatePostSize::class,
+        ]);
         $middleware->alias([
             'permission' => \App\Http\Middleware\CheckPermission::class,
             'arqueo.open' => \App\Http\Middleware\RequireOpenArqueo::class,

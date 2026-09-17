@@ -1,6 +1,5 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BackupController;
 use App\Http\Controllers\Api\CategoryController;
@@ -11,7 +10,6 @@ use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ProductBatchController;
 use App\Http\Controllers\Api\ProductConversionController;
 use App\Http\Controllers\Api\ReportController;
-use App\Http\Controllers\Api\RolePermissionController;
 use App\Http\Controllers\Api\SaleController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\ArqueoController;
@@ -63,8 +61,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Users (admin only)
     Route::middleware('permission:users.manage')->group(function () {
         Route::apiResource('users', UserController::class);
-        Route::get('/roles-permissions', [RolePermissionController::class, 'index']);
-        Route::put('/users/{user}/permissions', [RolePermissionController::class, 'updateUserPermissions']);
+        // RolePermissionController routes commented out - controller missing
+        // Route::get('/roles-permissions', [RolePermissionController::class, 'index']);
+        // Route::put('/users/{user}/permissions', [RolePermissionController::class, 'updateUserPermissions']);
         Route::put('/users/{user}/role', [UserController::class, 'updateRole']);
     });
 
@@ -96,9 +95,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Backups
     Route::get('/backups', [BackupController::class, 'index']);
-    Route::post('/backups', [BackupController::class, 'store']);
-    Route::post('/backups/restore/{filename}', [BackupController::class, 'restore']);
-    Route::delete('/backups/{filename}', [BackupController::class, 'destroy']);
+    Route::post('/backups', [BackupController::class, 'create']);
+    Route::get('/backups/{backup}/download', [BackupController::class, 'download']);
+    Route::post('/backups/{backup}/restore', [BackupController::class, 'restore']);
+    Route::delete('/backups/{backup}', [BackupController::class, 'destroy']);
 
 
 });
