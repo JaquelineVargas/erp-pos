@@ -14,11 +14,13 @@ use App\Http\Controllers\Api\SaleController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\ArqueoController;
 
-// Public routes
-Route::post('/login', [AuthController::class, 'login']);
-Route::get('/sales/{sale}/ticket', [SaleController::class, 'ticket']);
+// Public routes (with api middleware for JSON parsing)
+Route::middleware('api')->group(function () {
+    Route::post('/login', [AuthController::class, 'login']);
+    Route::get('/sales/{sale}/ticket', [SaleController::class, 'ticket']);
+});
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['api', 'auth:sanctum'])->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
