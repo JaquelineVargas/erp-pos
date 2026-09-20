@@ -1,23 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import api from '../../services/api';
+import { useArqueo } from '../../contexts/ArqueoContext';
 
 export default function Topbar() {
   const { user, logout } = useAuth();
-  const [openRegister, setOpenRegister] = useState(false);
-
-  useEffect(() => {
-    checkArqueo();
-    const interval = setInterval(checkArqueo, 15000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const checkArqueo = async () => {
-    try {
-      const { data } = await api.get('/arqueo/current');
-      setOpenRegister(!!data);
-    } catch { setOpenRegister(false); }
-  };
+  const { arqueo, loading } = useArqueo();
 
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -49,8 +36,12 @@ export default function Topbar() {
         <h1>Sistema ERP POS</h1>
       </div>
       <div className="topbar-user">
-        {openRegister && (
-          <span className="badge badge-warning">Arqueo Abierto</span>
+        {loading ? (
+          <span className="badge badge-info">Cargando...</span>
+        ) : arqueo ? (
+          <span className="badge badge-success">Arqueo Abierto</span>
+        ) : (
+          <span className="badge badge-danger">Arqueo Cerrado</span>
         )}
         <span className="user-role">{roleLabels[user?.role] || user?.role}</span>
         <span className="user-name">{user?.name}</span>

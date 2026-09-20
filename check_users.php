@@ -1,0 +1,1 @@
+﻿<?php $db = new PDO("sqlite:/var/www/html/database/database.sqlite"); $stmt = $db->query("SELECT u.id, u.name, u.email, u.role FROM users u"); while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) { echo json_encode($row) . PHP_EOL; }

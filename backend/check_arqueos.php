@@ -1,0 +1,1 @@
+﻿<?php $db = new PDO("sqlite:/var/www/html/database/database.sqlite"); $stmt = $db->query("SELECT a.id, a.user_id, u.name, u.email, a.state, a.opened_at, a.closed_at FROM arqueos a JOIN users u ON a.user_id = u.id ORDER BY a.opened_at DESC"); while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) { echo json_encode($row) . PHP_EOL; }

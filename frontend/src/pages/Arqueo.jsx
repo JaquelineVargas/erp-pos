@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
+import { useArqueo } from '../contexts/ArqueoContext';
 import api from '../services/api';
 import { formatPrice } from '../utils/format';
 
 export default function Arqueo() {
-  const [arqueo, setArqueo] = useState(null);
+  const { arqueo, setOpen, setClosed, refresh } = useArqueo();
   const [initialAmount, setInitialAmount] = useState('');
   const [finalAmount, setFinalAmount] = useState('');
   const [closeNotes, setCloseNotes] = useState('');
@@ -18,15 +19,7 @@ export default function Arqueo() {
   const [opening, setOpening] = useState(false);
   const [closing, setClosing] = useState(false);
 
-  useEffect(() => { loadArqueo(); }, []);
-
-  const loadArqueo = async () => {
-    try {
-      const { data } = await api.get('/arqueo/current', { params: { _: Date.now() } });
-      setArqueo(data?.id ? data : null);
-    } catch { setArqueo(null); }
-    finally { setLoading(false); }
-  };
+  useEffect(() => { refresh(); }, [refresh]);
 
   const loadHistory = async () => {
     try {
@@ -41,9 +34,9 @@ export default function Arqueo() {
     setOpening(true);
     setOpenError('');
     try {
-      await api.post('/arqueo/open', { initial_amount: Number(initialAmount) });
+      const { data } = await api.post('/arqueo/open', { initial_amount: Number(initialAmount) });
       setInitialAmount('');
-      loadArqueo();
+      setOpen(data);
     } catch (err) {
       setOpenError(err.response?.data?.message || 'Error al abrir arqueo');
     } finally {
@@ -58,7 +51,7 @@ export default function Arqueo() {
     setCloseError('');
     try {
       await api.post('/arqueo/close', { final_amount: Number(finalAmount), notes: closeNotes });
-      setArqueo(null);
+      setClosed();
       setFinalAmount('');
       setCloseNotes('');
     } catch (err) {
@@ -80,7 +73,7 @@ export default function Arqueo() {
         amount: Number(movementForm.amount),
       });
       setMovementForm({ type: 'manual_income', description: '', amount: '' });
-      loadArqueo();
+      refresh();
     } catch (err) {
       setMovementError(err.response?.data?.message || 'Error al registrar movimiento');
     } finally {
